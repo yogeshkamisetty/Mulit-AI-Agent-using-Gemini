@@ -1,55 +1,81 @@
 import { DetectionItem } from "../types";
 
-// Types for internal tracker state
+interface KalmanState {
+  y: number;    // Position (normalized 0-1)
+  v: number;    // Velocity (normalized units / s)
+  p11: number;  // Variance y
+  p12: number;  // Covariance y,v
+  p21: number;  // Covariance v,y
+  p22: number;  // Variance v
+}
+
 interface TrackedObject {
   id: number;
   class: string;
   box: [number, number, number, number]; // [ymin, xmin, ymax, xmax]
   centroid: [number, number]; // [x, y] normalized
-  history: [number, number][]; // History of centroids
+  avgHeight: number; // Smoothed normalized height for depth scaling
+  laneHistory: number[]; // Store recent X positions for lane analysis
   missingFrames: number;
-  speed: number;
-  dy: number; // Vertical velocity component
+  speed: number;    // km/h (Absolute)
+  velocity: number; // km/h (Signed)
   laneStatus: 'Stable' | 'Lane Change' | 'Merging';
   createdAt: number;
-  updatedAt: number; // Last update timestamp for dt calc
-  // Violation counters for persistence
+  updatedAt: number; // Last update timestamp
+  // Violation counters
   wrongWayFrames: number;
   speedingFrames: number;
+  // Filter State
+  kalman: KalmanState;
 }
+
+// Typical lengths in meters used for auto-calibration
+const REFERENCE_LENGTHS_METERS: Record<string, number> = {
+  'car': 4.5,
+  'taxi': 4.5,
+  'suv': 4.8,
+  'van': 5.2,
+  'truck': 12.0,
+  'lorry': 12.0,
+  'bus': 12.0,
+  'pickup': 5.2,
+  'motorcycle': 2.2,
+  'bike': 1.8,
+  'bicycle': 1.8,
+  'person': 0.5,
+  'pedestrian': 0.5,
+  'human': 0.5,
+  'default': 4.5
+};
 
 export class ObjectTracker {
   private tracks: TrackedObject[] = [];
   private nextId = 1;
-  // Tuned Parameters
+  
+  // Tracking Parameters
   private maxMissingFrames = 5; 
-  private iouThreshold = 0.2; 
+  private iouThreshold = 0.25; 
   private centroidDistanceThreshold = 0.15; 
   
-  // Speed Calculation Scalar
-  // Assuming 1.0 normalized height ~ 50 meters real world
-  // Speed (km/h) = (dy / dt_seconds) * 50 * 3.6
-  // Scalar ~ 180-200.
-  private SPEED_SCALAR = 200;
-
   // Violation Thresholds
   public SPEED_LIMIT_DEFAULT = 80; 
-  public SPEED_LIMIT_HEAVY = 60; // Bus/Truck
-  public SPEED_LIMIT_LIGHT = 50; // Auto-Rickshaw
+  public SPEED_LIMIT_HEAVY = 60; 
+  public SPEED_LIMIT_LIGHT = 50; 
 
-  // Smoothing Factor
-  private SMOOTHING_FACTOR = 0.3;
+  // Kalman Filter Tuning
+  private R = 0.005;     // Measurement Noise (approx 0.5% screen height jitter)
+  private Q_pos = 0.001; // Process Noise Position (low, model is accurate)
+  private Q_vel = 0.8;   // Process Noise Velocity (higher to catch braking/acceleration)
 
   constructor() {}
 
-  // Main update method called with new detections from API
   public update(detections: DetectionItem[], timestamp: number): DetectionItem[] {
     const validDetections = detections.filter(d => d.box_2d && d.type === 'vehicle');
     
-    // 1. Predict
+    // 1. Prediction Step (Age Tracks)
     this.tracks.forEach(t => t.missingFrames++);
 
-    // 2. Match
+    // 2. Matching Step (Greedy Association)
     const unmatchedDetections = new Set(validDetections.map((_, i) => i));
     
     this.tracks.forEach(track => {
@@ -66,7 +92,7 @@ export class ObjectTracker {
           bestMatchIndex = index;
         }
         
-        // Priority 2: Centroid Distance
+        // Priority 2: Centroid Distance (Backup for fast moving objects)
         if (bestMatchIndex === -1) {
             const detCentroid = this.getCentroid(det.box_2d);
             const dist = Math.sqrt(
@@ -90,81 +116,83 @@ export class ObjectTracker {
         
         track.missingFrames = 0;
         
-        // Time Delta Calculation
         const dt = (timestamp - track.updatedAt) / 1000; // seconds
         track.updatedAt = timestamp;
+        
+        const newCentroid = this.getCentroid(match.box_2d!);
+        const currentHeight = (match.box_2d![2] - match.box_2d![0]) / 1000;
 
-        // Exponential Moving Average for Box Smoothing
-        track.box = [
-            this.lerp(track.box[0], match.box_2d![0], this.SMOOTHING_FACTOR),
-            this.lerp(track.box[1], match.box_2d![1], this.SMOOTHING_FACTOR),
-            this.lerp(track.box[2], match.box_2d![2], this.SMOOTHING_FACTOR),
-            this.lerp(track.box[3], match.box_2d![3], this.SMOOTHING_FACTOR)
-        ];
-        
-        const newCentroid = this.getCentroid(track.box);
-        const deltaY = newCentroid[1] - track.centroid[1]; 
-        
-        track.dy = deltaY;
-        
-        // Physics-based Speed Calculation
-        let calculatedSpeed = 0;
-        if (dt > 0.1 && dt < 10) { // Ignore first frame (dt=0) or huge jumps
-            const velocity = Math.abs(deltaY) / dt; // normalized units per second
-            calculatedSpeed = Math.floor(velocity * this.SPEED_SCALAR);
+        // Kalman Filter Update
+        // Only update if time has passed, otherwise just update position
+        if (dt > 0.001) {
+           this.updateKalman(track.kalman, newCentroid[1], dt);
+        } else {
+           // Reset position if duplicate frame
+           track.kalman.y = newCentroid[1];
         }
-        
-        // Smooth the speed to avoid jitter
-        // If calculatedSpeed is 0 (stationary), decay faster
-        const alpha = calculatedSpeed === 0 ? 0.5 : 0.2;
-        track.speed = Math.floor(track.speed * (1 - alpha) + calculatedSpeed * alpha);
 
-        track.history.push(newCentroid);
-        if (track.history.length > 8) track.history.shift();
+        // Update Track State
+        track.box = match.box_2d!;
+        track.centroid = newCentroid;
+        // Smooth height to avoid jitter affecting speed scale
+        track.avgHeight = track.avgHeight * 0.9 + currentHeight * 0.1;
+        
+        // --- CALIBRATED SPEED ESTIMATION ---
+        // V (unit/s) / Height (unit) = Speed in "Vehicle Lengths per Second"
+        // Speed (m/s) = (V / Height) * Real_Length_M
+        
+        const v_norm_per_sec = track.kalman.v;
+        const refLength = this.getReferenceLength(track.class);
+        const safeHeight = Math.max(track.avgHeight, 0.02); // Avoid div/0
+        
+        // Perspective Factor: 
+        // In most camera angles, vertical movement (Y) is compressed relative to vertical size (H)
+        // because H represents the object length projected, while Y represents ground distance.
+        // A factor of 1.0 implies top-down. 
+        // A factor > 1.0 implies a shallower angle. 
+        // 1.0 is a safe conservative baseline for "pixels per pixel" logic.
+        const perspectiveFactor = 1.0; 
+
+        const speedMps = (Math.abs(v_norm_per_sec) / safeHeight) * refLength * perspectiveFactor;
+        
+        track.velocity = speedMps * 3.6 * Math.sign(v_norm_per_sec); // Signed km/h
+        track.speed = Math.abs(track.velocity);                      // Absolute km/h
 
         // Lane Discipline Logic
-        if (track.history.length >= 2) {
-            const historyDepth = Math.min(track.history.length, 4);
-            const startX = track.history[track.history.length - historyDepth][0];
-            const endX = newCentroid[0];
-            const lateralDisplacement = Math.abs(endX - startX);
-            
-            if (lateralDisplacement > 0.03) { // Threshold for lane change detection
-                track.laneStatus = 'Lane Change';
-            } else {
-                track.laneStatus = 'Stable';
-            }
-        }
+        track.laneHistory.push(newCentroid[0]);
+        if (track.laneHistory.length > 10) track.laneHistory.shift();
+        this.updateLaneStatus(track);
 
-        track.centroid = newCentroid;
-
-        // Sync track data to detection
+        // Sync Track Data to Detection Item
         match.trackId = track.id;
-        match.box_2d = track.box; 
-        match.estimatedSpeed = track.speed;
+        match.estimatedSpeed = Math.floor(track.speed);
         match.laneEvent = track.laneStatus;
       }
     });
 
-    // 3. Create New Tracks
+    // 3. Creation Step (New Tracks)
     unmatchedDetections.forEach(index => {
       const det = validDetections[index];
       if (det.box_2d) {
         const newCentroid = this.getCentroid(det.box_2d);
+        const newHeight = (det.box_2d[2] - det.box_2d[0]) / 1000;
+        
         const newTrack: TrackedObject = {
           id: this.nextId++,
           class: det.object,
           box: det.box_2d,
           centroid: newCentroid,
-          history: [newCentroid],
+          avgHeight: newHeight,
+          laneHistory: [newCentroid[0]],
           missingFrames: 0,
           speed: 0,
-          dy: 0,
+          velocity: 0,
           laneStatus: 'Stable',
           createdAt: timestamp,
           updatedAt: timestamp,
           wrongWayFrames: 0,
-          speedingFrames: 0
+          speedingFrames: 0,
+          kalman: this.initKalman(newCentroid[1])
         };
         this.tracks.push(newTrack);
         
@@ -174,60 +202,10 @@ export class ObjectTracker {
       }
     });
 
-    // 4. Violation Checks
-    
-    // Determine Traffic Flow Direction
-    // Calculate average vertical direction of all moving vehicles
-    const activeMovingTracks = this.tracks.filter(t => t.missingFrames === 0 && Math.abs(t.dy) > 0.002); 
-    let dominantDy = 0;
-    if (activeMovingTracks.length > 2) { // Need quorum for flow direction
-        const totalDy = activeMovingTracks.reduce((sum, t) => sum + t.dy, 0);
-        dominantDy = totalDy / activeMovingTracks.length; 
-    }
+    // 4. Analysis Step (Violations)
+    this.checkViolations(validDetections);
 
-    validDetections.forEach(det => {
-        if (!det.trackId) return;
-        const track = this.tracks.find(t => t.id === det.trackId);
-        if (!track) return;
-
-        // SPEEDING CHECK: Dynamic Limits based on Vehicle Type
-        let speedLimit = this.SPEED_LIMIT_DEFAULT;
-        const type = (track.class || '').toLowerCase();
-        
-        if (type.includes('bus') || type.includes('truck') || type.includes('lorry')) {
-            speedLimit = this.SPEED_LIMIT_HEAVY;
-        } else if (type.includes('rickshaw') || type.includes('auto') || type.includes('tuk')) {
-            speedLimit = this.SPEED_LIMIT_LIGHT;
-        }
-
-        if (track.speed > speedLimit) {
-            track.speedingFrames++;
-        } else {
-            track.speedingFrames = Math.max(0, track.speedingFrames - 1);
-        }
-
-        if (track.speedingFrames >= 2) { // Persistence check (2 frames)
-             det.isSpeeding = true;
-        }
-
-        // WRONG WAY CHECK: Flow Analysis
-        // Must be moving significant speed to count as wrong way (avoid jitter stationary)
-        // And traffic flow must be well defined (dominantDy is significant)
-        if (Math.abs(dominantDy) > 0.005 && Math.abs(track.dy) > 0.005) {
-             // If direction opposes the dominant flow
-             if (Math.sign(dominantDy) !== Math.sign(track.dy)) {
-                 track.wrongWayFrames++;
-             } else {
-                 track.wrongWayFrames = 0;
-             }
-        }
-
-        if (track.wrongWayFrames >= 3) { // Persistence check (3 frames)
-             det.isWrongWay = true;
-        }
-    });
-
-    // 5. Cleanup
+    // 5. Cleanup Step
     this.tracks = this.tracks.filter(t => t.missingFrames <= this.maxMissingFrames);
 
     return detections;
@@ -238,9 +216,81 @@ export class ObjectTracker {
     this.nextId = 1;
   }
 
-  // Helpers
-  private lerp(start: number, end: number, factor: number): number {
-      return start + (end - start) * factor;
+  // --- Helpers ---
+
+  private getReferenceLength(type: string): number {
+      const t = type.toLowerCase();
+      for (const key in REFERENCE_LENGTHS_METERS) {
+          if (t.includes(key)) return REFERENCE_LENGTHS_METERS[key];
+      }
+      return REFERENCE_LENGTHS_METERS['default'];
+  }
+
+  private checkViolations(detections: DetectionItem[]) {
+      // Determine Traffic Flow Direction (Average of all moving vehicles)
+      const movingTracks = this.tracks.filter(t => t.speed > 5); // Ignore stationary
+      let flowDir = 0;
+      if (movingTracks.length > 0) {
+          const sumV = movingTracks.reduce((acc, t) => acc + t.velocity, 0);
+          flowDir = sumV / movingTracks.length;
+      }
+
+      detections.forEach(d => {
+          if (!d.trackId) return;
+          const track = this.tracks.find(t => t.id === d.trackId);
+          if (!track) return;
+
+          // Speeding Check
+          let limit = this.SPEED_LIMIT_DEFAULT;
+          const type = (track.class || '').toLowerCase();
+          
+          if (type.includes('bus') || type.includes('truck') || type.includes('lorry')) {
+              limit = this.SPEED_LIMIT_HEAVY;
+          } else if (type.includes('rickshaw') || type.includes('auto') || type.includes('bike')) {
+              limit = this.SPEED_LIMIT_LIGHT;
+          }
+
+          if (track.speed > limit) {
+              track.speedingFrames++;
+          } else {
+              track.speedingFrames = Math.max(0, track.speedingFrames - 1);
+          }
+
+          if (track.speedingFrames >= 2) { 
+               d.isSpeeding = true;
+          }
+
+          // Wrong Way Check
+          // Requires significant flow speed and vehicle speed to be confident
+          if (Math.abs(flowDir) > 10 && track.speed > 10) {
+               // If signs are opposite
+               if (Math.sign(track.velocity) !== Math.sign(flowDir)) {
+                   track.wrongWayFrames++;
+               } else {
+                   track.wrongWayFrames = 0;
+               }
+          }
+          if (track.wrongWayFrames >= 3) { 
+               d.isWrongWay = true;
+          }
+      });
+  }
+
+  private updateLaneStatus(track: TrackedObject) {
+      if (track.laneHistory.length < 5) return;
+      
+      const recent = track.laneHistory.slice(-5);
+      const minX = Math.min(...recent);
+      const maxX = Math.max(...recent);
+      const variance = maxX - minX;
+
+      // 0.05 normalized width is about 5% of screen width.
+      // If moving laterally more than 5% in 5 frames, likely changing lanes
+      if (variance > 0.05) {
+         track.laneStatus = 'Lane Change';
+      } else {
+         track.laneStatus = 'Stable';
+      }
   }
 
   private getCentroid(box: [number, number, number, number]): [number, number] {
@@ -261,5 +311,56 @@ export class ObjectTracker {
 
     if (boxAArea + boxBArea - interArea === 0) return 0;
     return interArea / (boxAArea + boxBArea - interArea);
+  }
+
+  // --- Kalman Filter Implementation ---
+
+  private initKalman(y: number): KalmanState {
+    return {
+      y: y,
+      v: 0,
+      p11: 1, p12: 0,
+      p21: 0, p22: 1
+    };
+  }
+
+  private updateKalman(state: KalmanState, measurement: number, dt: number) {
+    // 1. Predict
+    // x_pred = F x
+    const pred_y = state.y + state.v * dt;
+    const pred_v = state.v;
+    
+    // P_pred = F P F^T + Q
+    const dt2 = dt * dt;
+    const pp11 = state.p11 + dt * (state.p12 + state.p21) + dt2 * state.p22 + (this.Q_pos * dt);
+    const pp12 = state.p12 + dt * state.p22;
+    const pp21 = state.p21 + dt * state.p22;
+    const pp22 = state.p22 + (this.Q_vel * dt);
+
+    // 2. Update
+    // y_innov = z - H x_pred
+    const y_innov = measurement - pred_y;
+    
+    // S = H P_pred H^T + R
+    const s = pp11 + this.R;
+    
+    // K = P_pred H^T S^-1
+    const k1 = pp11 / s;
+    const k2 = pp21 / s; 
+
+    // x_new = x_pred + K y_innov
+    state.y = pred_y + k1 * y_innov;
+    state.v = pred_v + k2 * y_innov;
+
+    // P_new = (I - K H) P_pred
+    const p11_new = (1 - k1) * pp11;
+    const p12_new = (1 - k1) * pp12;
+    const p21_new = -k2 * pp11 + pp21;
+    const p22_new = -k2 * pp12 + pp22;
+
+    state.p11 = p11_new;
+    state.p12 = p12_new;
+    state.p21 = p21_new;
+    state.p22 = p22_new;
   }
 }

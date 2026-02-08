@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Multi AI Agent - Traffic Monitor",
+  "name": "Multi AI Agent - Traffic Monitor",
   "description": "A multi-agent AI simulation for traffic monitoring. Uses Gemini Vision to detect vehicles, analyze congestion, and generate traffic control reports.",
   "requestFramePermissions": [
     "camera",
