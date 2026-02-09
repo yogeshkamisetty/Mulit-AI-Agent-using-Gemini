@@ -58,7 +58,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
                      <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                            <img src={item.thumbnail} alt="thumb" className="w-10 h-6 object-cover rounded border border-slate-600" />
-                           <span className="text-xs truncate max-w-[150px]">{item.locationContext?.address || 'Unknown'}</span>
+                           <span className="text-xs truncate max-w-[150px]">{item.locationContext?.address || item.analysis.sceneType || 'Unknown'}</span>
                         </div>
                      </td>
                      <td className="px-4 py-3">
@@ -170,7 +170,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
           <div className="text-2xl font-bold font-mono" style={{ color: congestionColor }}>
             {analysis.congestionLevel}%
           </div>
-          <div className="text-xs text-slate-500 mt-1">{analysis.trafficFlowStatus}</div>
+          <div className="flex items-center justify-between mt-1">
+             <div className="text-xs text-slate-500">{analysis.trafficFlowStatus}</div>
+             {analysis.sceneType && (
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                  {analysis.sceneType}
+                </span>
+             )}
+          </div>
         </div>
 
         <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">

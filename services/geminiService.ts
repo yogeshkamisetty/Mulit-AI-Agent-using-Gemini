@@ -32,7 +32,7 @@ const fastAnalysisSchema = {
   required: ["detections", "congestionLevel", "trafficFlowStatus"]
 };
 
-// Full Schema: Everything including text reports
+// Full Schema: Everything including text reports and scene type
 const fullAnalysisSchema = {
   type: Type.OBJECT,
   properties: {
@@ -69,6 +69,7 @@ const fullAnalysisSchema = {
         },
         congestionLevel: { type: Type.INTEGER },
         trafficFlowStatus: { type: Type.STRING, enum: ["Free Flow", "Moderate", "Heavy", "Gridlock"] },
+        sceneType: { type: Type.STRING, enum: ["Highway", "Intersection", "City Street", "Parking Lot", "Tunnel", "Other"] },
         estimatedAverageSpeed: { type: Type.INTEGER },
         detectedViolations: { 
           type: Type.ARRAY, 
@@ -236,18 +237,33 @@ export const analyzeTrafficFast = async (base64Image: string, mimeType: string):
 
 /**
  * Full Analysis for Snapshots or Periodic Checks
+ * Automatically detects scene type and adapts analysis parameters.
  */
 export const analyzeTrafficImage = async (base64Image: string, mimeType: string): Promise<FullAnalysisResult> => {
-  const modelId = "gemini-2.5-flash"; // Flash is fast enough for this too usually
+  const modelId = "gemini-2.5-flash"; 
 
   try {
         const optimizedImage = await optimizeBase64Image(base64Image, 1024);
         const base64Data = optimizedImage.split(',')[1];
 
+        // Updated system instruction to be scene-aware
         const systemInstruction = `
           You are the 'Multi AI Agent' Traffic Monitoring System.
-          Detect objects (Car, Truck, Bus, Bike, Person) with [ymin, xmin, ymax, xmax] boxes (0-1000).
-          Analyze congestion, violations (red light, jaywalking), and flow.
+          
+          PHASE 1: SCENE IDENTIFICATION
+          Classify the image into one of these types: 'Highway', 'Intersection', 'City Street', 'Parking Lot', 'Tunnel', or 'Other'.
+          
+          PHASE 2: CONTEXT-AWARE ANALYSIS
+          Adjust your analysis based on the identified scene:
+          - Highway: Focus on flow efficiency, lane discipline, and hard shoulder violations. Speed assumption: High.
+          - Intersection: Focus on traffic signal compliance, stop lines, and turning conflicts.
+          - City Street: High alert for pedestrians, cyclists, and illegal parking. Speed assumption: Low/Moderate.
+          - Tunnel: Critical alert for stopped vehicles or lane changes.
+          
+          PHASE 3: DETECTION & REPORTING
+          - Detect objects (Car, Truck, Bus, Bike, Person) with [ymin, xmin, ymax, xmax] boxes (0-1000).
+          - Analyze congestion level (0-100) and flow status.
+          - List specific violations with severity based on the scene context.
         `;
 
         const response = await ai.models.generateContent({
@@ -255,7 +271,7 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
           contents: {
             parts: [
               { inlineData: { mimeType: "image/jpeg", data: base64Data } },
-              { text: "Analyze traffic. Detect objects. Generate report." }
+              { text: "Analyze traffic scene. Identify scene type and detect issues." }
             ]
           },
           config: {
@@ -274,7 +290,6 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
 
     } catch (error) {
         handleGeminiError(error);
-        // Return dummy to satisfy typescript if error wasn't thrown
         throw error;
     }
 };

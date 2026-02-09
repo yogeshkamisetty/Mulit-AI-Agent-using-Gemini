@@ -176,6 +176,7 @@ export class ObjectTracker {
         // Sync to Detection
         match.trackId = track.id;
         match.estimatedSpeed = track.speed;
+        match.velocity = track.velocity; // Export signed velocity
         match.laneEvent = track.laneStatus;
         match.speedHistory = [...track.speedHistory]; // Export history for UI
       }
@@ -210,6 +211,7 @@ export class ObjectTracker {
         
         det.trackId = newTrack.id;
         det.estimatedSpeed = 0;
+        det.velocity = 0;
         det.laneEvent = 'Stable';
         det.speedHistory = [0];
       }

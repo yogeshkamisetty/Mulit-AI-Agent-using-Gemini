@@ -16,7 +16,8 @@ export interface DetectionItem {
   // New Tracking Fields
   box_2d?: [number, number, number, number]; // [ymin, xmin, ymax, xmax] (Normalized 0-1000)
   trackId?: number;
-  estimatedSpeed?: number; // km/h
+  estimatedSpeed?: number; // km/h (Absolute magnitude)
+  velocity?: number; // Normalized units/sec (Signed direction)
   laneEvent?: 'Stable' | 'Lane Change' | 'Merging';
   isSpeeding?: boolean; // New: Tracking derived
   isWrongWay?: boolean; // New: Tracking derived
@@ -40,6 +41,7 @@ export interface TrafficAnalysis {
   trafficLights: TrafficLight[];
   congestionLevel: number; // 0-100
   trafficFlowStatus: 'Free Flow' | 'Moderate' | 'Heavy' | 'Gridlock';
+  sceneType?: 'Highway' | 'Intersection' | 'City Street' | 'Parking Lot' | 'Tunnel' | 'Other';
   estimatedAverageSpeed: number; // km/h
   detectedViolations: Violation[];
 }

@@ -6,12 +6,16 @@ import { analyzeTrafficImage, analyzeTrafficFast, getLocationContext } from './s
 import { ObjectTracker } from './services/trackingService';
 import { AgentStatus, FullAnalysisResult, HistoryItem, LocationContextData, Violation } from './types';
 
-// Robust Simulation Data
+// Robust Simulation Data with Diverse Scenarios
 const SIMULATION_SCENARIOS = [
-  { url: "https://images.unsplash.com/photo-1566008885218-90abf9200ddb?q=80&w=1000", label: "Scenario 1: Moderate Flow" },
-  { url: "https://images.unsplash.com/photo-1545173168-9f1947eebb8f?q=80&w=1000", label: "Scenario 2: Intersection Check" },
+  { url: "https://images.unsplash.com/photo-1566008885218-90abf9200ddb?q=80&w=1000", label: "Scenario 1: Moderate Highway Flow" },
+  { url: "https://images.unsplash.com/photo-1545173168-9f1947eebb8f?q=80&w=1000", label: "Scenario 2: Urban Intersection" },
   { url: "https://images.unsplash.com/photo-1597762139711-8a5a0642219c?q=80&w=1000", label: "Scenario 3: Heavy Congestion" },
-  { url: "https://images.unsplash.com/photo-1502877338535-766e1452684a?q=80&w=1000", label: "Scenario 4: Night Patrol" }
+  { url: "https://images.unsplash.com/photo-1502877338535-766e1452684a?q=80&w=1000", label: "Scenario 4: Night City Patrol" },
+  { url: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?q=80&w=1000", label: "Scenario 5: Rainy Weather" },
+  { url: "https://images.unsplash.com/photo-1548685913-fe6678b0d7f3?q=80&w=1000", label: "Scenario 6: Snowy Conditions" },
+  { url: "https://images.unsplash.com/photo-1485573489862-2315b93d7c2a?q=80&w=1000", label: "Scenario 7: Foggy Morning" },
+  { url: "https://images.unsplash.com/photo-1494522855154-9297ac14b55f?q=80&w=1000", label: "Scenario 8: Tunnel Surveillance" }
 ];
 
 const ErrorBanner = ({ message, onDismiss }: { message: string, onDismiss: () => void }) => (
@@ -438,6 +442,39 @@ export default function App() {
         ctx.fillStyle = '#000';
         ctx.font = 'bold 10px monospace';
         ctx.fillText(`${det.object} ${det.trackId ? '#'+det.trackId : ''}`, x + 2, y - 6);
+
+        // --- DRAW FLOW ARROWS ---
+        if (isTracked && det.velocity !== undefined && Math.abs(det.velocity) > 0.05) {
+            const centerX = x + w / 2;
+            const centerY = y + h / 2;
+            
+            // Velocity is roughly "screens per second".
+            // We scale it up to be visible on static frames.
+            // Sign of velocity: + is down (y increases), - is up (y decreases).
+            const arrowLength = (det.velocity * canvas.height) * 0.5; // Scale factor 0.5 sec prediction
+            
+            const endX = centerX;
+            const endY = centerY + arrowLength;
+
+            // Draw line
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = det.isWrongWay ? '#ef4444' : '#22d3ee'; // Red if wrong way, else Cyan
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw Arrowhead
+            const angle = Math.atan2(endY - centerY, endX - centerX);
+            const headLen = 10;
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(endX, endY);
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.fill();
+        }
     });
   };
   
@@ -454,8 +491,8 @@ export default function App() {
       <header className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <button onClick={goHome} className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-cyan-600 rounded flex items-center justify-center font-bold text-white">M</div>
-            <span className="font-bold text-white">Traffic<span className="text-cyan-400">Agent</span></span>
+            <div className="w-8 h-8 bg-cyan-600 rounded flex items-center justify-center font-bold text-white">U</div>
+            <span className="font-bold text-white">Urban<span className="text-cyan-400">Pulse</span></span>
           </button>
           <nav className="flex gap-2">
              <button onClick={goHome} className={`px-3 py-1.5 rounded-lg text-sm ${activeView === 'home' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Home</button>
@@ -471,37 +508,58 @@ export default function App() {
         {activeView === 'home' && (
           <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
             <div className="text-center mb-10 pt-8">
-              <h2 className="text-4xl font-bold text-white mb-4">Autonomous Traffic Control</h2>
-              <p className="text-slate-400">Deploy multi-agent vision systems for real-time analysis.</p>
+              <h2 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500 mb-4 tracking-tight">UrbanPulse AI</h2>
+              <p className="text-lg text-slate-400 max-w-2xl mx-auto">Orchestrating urban flow with autonomous multi-agent vision. Detect, analyze, and optimize traffic in real-time.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="col-span-2 h-48 border-2 border-dashed border-slate-700 rounded-2xl flex flex-col items-center justify-center bg-slate-900/50 hover:bg-slate-800 cursor-pointer">
-                <Upload className="w-8 h-8 text-cyan-500 mb-2" />
-                <span className="font-medium text-white">Upload Media</span>
-                <span className="text-xs text-slate-500 mt-1">Images or MP4 Video</span>
+              <label className="col-span-2 h-48 border-2 border-dashed border-slate-700 rounded-2xl flex flex-col items-center justify-center bg-slate-900/50 hover:bg-slate-800 cursor-pointer transition-colors group">
+                <div className="p-4 bg-cyan-950/30 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                   <Upload className="w-8 h-8 text-cyan-400" />
+                </div>
+                <span className="font-medium text-white">Upload Traffic Footage</span>
+                <span className="text-xs text-slate-500 mt-1">Supports Images & MP4 Video</span>
                 <input type="file" className="hidden" multiple accept="image/*,video/*" onChange={handleUpload} />
               </label>
 
-              <button onClick={startCamera} className="p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-red-500/50 text-left group">
-                 <Camera className="w-6 h-6 text-red-400 mb-3" />
-                 <h3 className="font-bold text-white">Live Feed</h3>
-                 <p className="text-sm text-slate-400">Connect to local camera stream.</p>
+              <button onClick={startCamera} className="p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-red-500/50 text-left group transition-all hover:bg-slate-800/80">
+                 <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 bg-red-950/30 rounded-lg">
+                       <Camera className="w-6 h-6 text-red-400" />
+                    </div>
+                    <div className="px-2 py-1 bg-red-500/20 rounded text-[10px] text-red-300 font-bold uppercase">Live</div>
+                 </div>
+                 <h3 className="font-bold text-white text-lg">Live Feed</h3>
+                 <p className="text-sm text-slate-400 mt-1">Connect to local camera stream for real-time edge monitoring.</p>
               </button>
 
-              <button onClick={startSimulation} className="p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-indigo-500/50 text-left group">
-                 <Layers className="w-6 h-6 text-indigo-400 mb-3" />
-                 <h3 className="font-bold text-white">Simulation</h3>
-                 <p className="text-sm text-slate-400">Run pre-configured scenario.</p>
+              <button onClick={startSimulation} className="p-6 bg-slate-800 rounded-2xl border border-slate-700 hover:border-indigo-500/50 text-left group transition-all hover:bg-slate-800/80">
+                 <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 bg-indigo-950/30 rounded-lg">
+                       <Layers className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div className="px-2 py-1 bg-indigo-500/20 rounded text-[10px] text-indigo-300 font-bold uppercase">Demo</div>
+                 </div>
+                 <h3 className="font-bold text-white text-lg">Simulation</h3>
+                 <p className="text-sm text-slate-400 mt-1">Run pre-configured scenarios including night, rain, and tunnels.</p>
               </button>
             </div>
             
             {history.length > 0 && (
-               <div className="mt-8 p-4 bg-slate-900 rounded-xl border border-slate-800">
-                 <h4 className="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2"><Database className="w-4 h-4" /> Recent Analysis</h4>
-                 <div className="flex gap-2 overflow-x-auto pb-2">
+               <div className="mt-8 p-6 bg-slate-900/50 rounded-2xl border border-slate-800 backdrop-blur-sm">
+                 <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold text-slate-400 flex items-center gap-2"><Database className="w-4 h-4" /> Recent Analysis</h4>
+                    <button onClick={() => navigateTo('history')} className="text-xs text-cyan-400 hover:underline">View All</button>
+                 </div>
+                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                     {history.slice(0, 5).map((h, i) => (
-                        <img key={i} src={h.thumbnail} className="w-24 h-16 object-cover rounded border border-slate-700 cursor-pointer hover:opacity-80" onClick={() => handleLoadHistoryItem(h)} />
+                        <div key={i} className="relative group cursor-pointer flex-shrink-0" onClick={() => handleLoadHistoryItem(h)}>
+                           <img src={h.thumbnail} className="w-32 h-20 object-cover rounded-lg border border-slate-700 group-hover:border-cyan-500 transition-colors" />
+                           <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors rounded-lg"></div>
+                           <div className="absolute bottom-1 left-1 right-1 flex justify-between items-end">
+                              <span className="text-[10px] text-white font-mono bg-black/60 px-1 rounded">{new Date(h.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                           </div>
+                        </div>
                     ))}
                  </div>
                </div>
@@ -512,16 +570,19 @@ export default function App() {
         {activeView === 'monitor' && (
             <div className="animate-fadeIn">
                <div className="flex items-center justify-between mb-4">
-                 <button onClick={() => navigateTo('home')} className="text-sm text-slate-400 hover:text-white flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Home</button>
+                 <button onClick={() => navigateTo('home')} className="text-sm text-slate-400 hover:text-white flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back to Hub</button>
                  {isSimulating && (
-                   <span className="text-xs font-mono text-indigo-400 bg-indigo-950/50 px-2 py-1 rounded border border-indigo-900">
-                     SIMULATION STEP {simulationStep}/{SIMULATION_SCENARIOS.length}
-                   </span>
+                   <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-slate-400">SCENARIO PLAYBACK</span>
+                      <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/50 px-3 py-1 rounded-full border border-indigo-900/50">
+                        {simulationStep} / {SIMULATION_SCENARIOS.length}
+                      </span>
+                   </div>
                  )}
                </div>
 
-               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 mb-6 relative overflow-hidden">
-                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden ring-1 ring-slate-700">
+               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 mb-6 relative overflow-hidden shadow-2xl">
+                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden ring-1 ring-slate-700 group">
                      {(isCameraActive || processingVideo) ? (
                         <video ref={videoRef} autoPlay={isCameraActive} muted playsInline className="w-full h-full object-contain" />
                      ) : (
@@ -532,15 +593,23 @@ export default function App() {
                      {status === AgentStatus.VISION_SCANNING && (
                         <div className="absolute inset-0 pointer-events-none border-b-2 border-cyan-500/50 animate-scan shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
                      )}
+                     
+                     {/* Overlay Stats (Optional) */}
+                     <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${status === AgentStatus.IDLE ? 'bg-slate-500' : 'bg-green-500 animate-pulse'}`}></div>
+                        <span className="text-xs font-mono font-bold text-white uppercase">{status.replace('_', ' ')}</span>
+                     </div>
                   </div>
                   
                   {/* Controls */}
                   <div className="flex justify-between items-center mt-4">
-                     <button onClick={stopAllModes} className="flex items-center gap-2 text-sm font-bold text-red-400 hover:text-red-300 px-4 py-2 bg-red-950/20 rounded-lg hover:bg-red-950/40">
+                     <button onClick={stopAllModes} className="flex items-center gap-2 text-sm font-bold text-red-400 hover:text-red-300 px-4 py-2 bg-red-950/20 rounded-lg hover:bg-red-950/40 transition-colors border border-red-900/30">
                        <StopCircle className="w-4 h-4" /> Stop Session
                      </button>
                      <div className="flex gap-2">
-                        <button onClick={handleLocationDiscovery} className="p-2 text-indigo-400 bg-indigo-950/20 rounded-lg hover:bg-indigo-950/40" title="Detect Location"><LocateFixed className="w-4 h-4" /></button>
+                        <button onClick={handleLocationDiscovery} className="flex items-center gap-2 px-3 py-2 text-indigo-400 bg-indigo-950/20 rounded-lg hover:bg-indigo-950/40 transition-colors border border-indigo-900/30 text-xs font-medium">
+                            <LocateFixed className="w-3.5 h-3.5" /> Detect Location
+                        </button>
                      </div>
                   </div>
                </div>
@@ -552,7 +621,7 @@ export default function App() {
         
         {activeView === 'history' && (
            <div className="animate-fadeIn">
-             <button onClick={() => navigateTo('home')} className="mb-4 text-sm text-slate-400 hover:text-white flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Home</button>
+             <button onClick={() => navigateTo('home')} className="mb-4 text-sm text-slate-400 hover:text-white flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back to Hub</button>
              <ResultsDashboard data={null} history={history} videoSessionData={[]} onLoadHistoryItem={handleLoadHistoryItem} />
            </div>
         )}
