@@ -3,30 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Multi AI Agent | Traffic Monitoring</title>
+    <title>Multi AI TrafficAgent | Autonomous Monitoring</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: {
-              slate: {
-                850: '#1e293b',
-                900: '#0f172a',
-                950: '#020617',
-              },
-              cyan: {
-                450: '#00b8d4',
+              brand: {
+                red: '#FF6B6B',      // Coral Red from image
+                cream: '#FEF9C3',    // Cream/Light Yellow from image
+                sky: '#7DD3FC',      // Light Blue from image
+                indigo: '#6366F1',   // Purple/Indigo from image
+                dark: '#0B0F19',     // Deep background
+                panel: '#151B2B',    // Panel background
               }
             },
             animation: {
               'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'scan': 'scan 2s linear infinite',
+              'fadeIn': 'fadeIn 0.5s ease-out forwards',
             },
             keyframes: {
               scan: {
                 '0%': { transform: 'translateY(-100%)' },
                 '100%': { transform: 'translateY(100%)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
               }
             }
           },
@@ -37,11 +42,26 @@
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #020617;
+        background-color: #0B0F19;
         color: #e2e8f0;
       }
       .font-mono {
         font-family: 'JetBrains Mono', monospace;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #151B2B; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #334155; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #475569; 
       }
     </style>
   <script type="importmap">

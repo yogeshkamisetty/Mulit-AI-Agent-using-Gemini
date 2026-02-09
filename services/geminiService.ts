@@ -102,14 +102,21 @@ const fullAnalysisSchema = {
 // --- UTILITIES ---
 
 // Optimize image size to reduce latency (Target 800px width)
-export const optimizeBase64Image = (base64Str: string, maxWidth = 800): Promise<string> => {
+// Updated to handle raw base64 or data URIs
+export const optimizeBase64Image = (base64Str: string, maxWidth = 800, mimeType = 'image/jpeg'): Promise<string> => {
   return new Promise((resolve) => {
+    // Ensure we have a valid data URI for the Image object
+    // If it's already a Data URI, use it. If it's raw base64, add prefix.
+    const hasPrefix = base64Str.startsWith('data:');
+    const src = hasPrefix ? base64Str : `data:${mimeType};base64,${base64Str}`;
+
     const img = new Image();
-    img.src = base64Str;
+    img.src = src;
+    
     img.onload = () => {
       const scale = maxWidth / img.width;
       if (scale >= 1) {
-        resolve(base64Str); // No resize needed
+        resolve(src); // Return as Data URI
         return;
       }
       
@@ -120,12 +127,18 @@ export const optimizeBase64Image = (base64Str: string, maxWidth = 800): Promise<
       if (ctx) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         // Reduce quality slightly for speed
-        resolve(canvas.toDataURL('image/jpeg', 0.85)); 
+        resolve(canvas.toDataURL(mimeType, 0.85)); 
       } else {
-        resolve(base64Str);
+        resolve(src);
       }
     };
-    img.onerror = () => resolve(base64Str);
+
+    img.onerror = () => {
+      // If image loading fails, resolve with the valid Data URI `src`.
+      // The consumer will split it by comma, so we MUST return a Data URI format,
+      // even if image loading failed (validation happens at API level then).
+      resolve(src);
+    };
   });
 };
 
@@ -186,14 +199,15 @@ export const analyzeTrafficFast = async (base64Image: string, mimeType: string):
     const modelId = "gemini-2.5-flash"; 
     
     try {
-        const optimizedImage = await optimizeBase64Image(base64Image, 640); // Aggressive resize for speed
+        // Pass mimeType to optimizer
+        const optimizedImage = await optimizeBase64Image(base64Image, 640, mimeType); 
         const base64Data = optimizedImage.split(',')[1];
         
         const response = await ai.models.generateContent({
             model: modelId,
             contents: {
                 parts: [
-                    { inlineData: { mimeType: "image/jpeg", data: base64Data } },
+                    { inlineData: { mimeType: mimeType, data: base64Data } },
                     { text: "Detect vehicles/pedestrians. Return 2D bounding boxes and congestion level." }
                 ]
             },
@@ -243,7 +257,8 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
   const modelId = "gemini-2.5-flash"; 
 
   try {
-        const optimizedImage = await optimizeBase64Image(base64Image, 1024);
+        // Pass mimeType to optimizer
+        const optimizedImage = await optimizeBase64Image(base64Image, 1024, mimeType);
         const base64Data = optimizedImage.split(',')[1];
 
         // Updated system instruction to be scene-aware
@@ -270,7 +285,7 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
           model: modelId,
           contents: {
             parts: [
-              { inlineData: { mimeType: "image/jpeg", data: base64Data } },
+              { inlineData: { mimeType: mimeType, data: base64Data } },
               { text: "Analyze traffic scene. Identify scene type and detect issues." }
             ]
           },

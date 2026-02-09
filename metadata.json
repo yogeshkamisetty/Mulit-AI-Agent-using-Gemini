@@ -1,6 +1,6 @@
 {
-  "name": "UrbanPulse AI - Traffic Monitor",
-  "description": "UrbanPulse: Orchestrating Urban Flow with Autonomous AI. A multi-agent system using Gemini Vision to detect vehicles, analyze congestion, and generate real-time traffic control insights.",
+  "name": "Multi AI Agent - Traffic Monitor",
+  "description": "A multi-agent AI simulation for traffic monitoring. Uses Gemini Vision to detect vehicles, analyze congestion, and generate traffic control reports.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

@@ -22,17 +22,17 @@ const PipelineStep = ({
   return (
     <div className={`flex flex-col items-center p-4 rounded-xl border transition-all duration-500 ${
       active 
-        ? 'border-cyan-500 bg-cyan-950/30 shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105' 
+        ? 'border-brand-sky bg-brand-sky/10 shadow-[0_0_15px_rgba(125,211,252,0.3)] scale-105' 
         : completed 
           ? 'border-green-500/50 bg-green-950/20 text-green-400' 
-          : 'border-slate-700 bg-slate-800/50 text-slate-500'
+          : 'border-white/10 bg-brand-panel/50 text-slate-500'
     }`}>
       <div className={`mb-3 p-3 rounded-full ${
-        active ? 'bg-cyan-500 text-black animate-pulse' : completed ? 'bg-green-500 text-black' : 'bg-slate-700'
+        active ? 'bg-brand-sky text-brand-dark animate-pulse' : completed ? 'bg-green-500 text-brand-dark' : 'bg-white/10'
       }`}>
         {active ? <Loader2 className="w-6 h-6 animate-spin" /> : completed ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
       </div>
-      <h3 className={`font-bold text-sm mb-1 ${active ? 'text-cyan-400' : ''}`}>{label}</h3>
+      <h3 className={`font-bold text-sm mb-1 ${active ? 'text-brand-sky' : ''}`}>{label}</h3>
       <p className="text-xs opacity-70 text-center max-w-[120px]">{subtext}</p>
     </div>
   );
@@ -52,7 +52,7 @@ export const AgentPipeline: React.FC<AgentPipelineProps> = ({ status }) => {
     <div className="w-full py-8">
       <div className="flex flex-col md:flex-row justify-center items-center gap-4 md:gap-8 relative">
         {/* Connecting Lines (Desktop) */}
-        <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-slate-800 -z-10" />
+        <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-white/5 -z-10" />
         
         <PipelineStep 
           active={isVision} 
