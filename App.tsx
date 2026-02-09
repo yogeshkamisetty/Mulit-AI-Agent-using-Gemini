@@ -547,12 +547,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(135deg,#FF5B5B,#F0FFC3,#9CCFFF,#685AFF)] text-slate-200 pb-12">
+    <div className="min-h-screen bg-[#D7F1D5] text-slate-900 pb-12">
       <canvas ref={canvasRef} className="hidden" />
       <header className="bg-brand-panel/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-50 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <button onClick={goHome} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-brand-indigo rounded-lg flex items-center justify-center font-bold text-white group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(99,102,241,0.5)]">U</div>
+            <div className="w-8 h-8 bg-brand-indigo rounded-lg flex items-center justify-center font-bold text-white group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(99,102,241,0.5)]">M</div>
             <span className="font-bold text-white text-lg tracking-tight drop-shadow-md">Traffic<span className="text-brand-sky">Agent</span></span>
           </button>
           <nav className="flex gap-2">
@@ -574,7 +574,7 @@ export default function App() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="col-span-2 h-48 border-2 border-dashed border-white/30 rounded-2xl flex flex-col items-center justify-center bg-brand-panel/90 hover:bg-brand-panel cursor-pointer transition-all group shadow-xl">
+              <label className="col-span-2 h-48 border-2 border-dashed border-brand-dark/20 rounded-2xl flex flex-col items-center justify-center bg-brand-panel/90 hover:bg-brand-panel cursor-pointer transition-all group shadow-xl">
                 <div className="p-4 bg-brand-sky/10 rounded-full mb-3 group-hover:scale-110 transition-transform">
                    <Upload className="w-8 h-8 text-brand-sky" />
                 </div>
@@ -583,7 +583,7 @@ export default function App() {
                 <input type="file" className="hidden" multiple accept="image/*,video/*" onChange={handleUpload} />
               </label>
 
-              <button onClick={startCamera} className="p-6 bg-brand-panel/90 rounded-2xl border border-white/20 hover:border-brand-red/50 text-left group transition-all shadow-xl hover:bg-brand-panel">
+              <button onClick={startCamera} className="p-6 bg-brand-panel/90 rounded-2xl border border-brand-dark/20 hover:border-brand-red/50 text-left group transition-all shadow-xl hover:bg-brand-panel">
                  <div className="flex items-center justify-between mb-4">
                      <div className="p-3 bg-brand-red/10 rounded-lg group-hover:bg-brand-red/20 transition-colors">
                         <Camera className="w-6 h-6 text-brand-red" />
@@ -594,7 +594,7 @@ export default function App() {
                  <p className="text-sm text-slate-400 mt-1">Connect to local camera stream.</p>
               </button>
 
-              <button onClick={startSimulation} className="p-6 bg-brand-panel/90 rounded-2xl border border-white/20 hover:border-brand-indigo/50 text-left group transition-all shadow-xl hover:bg-brand-panel">
+              <button onClick={startSimulation} className="p-6 bg-brand-panel/90 rounded-2xl border border-brand-dark/20 hover:border-brand-indigo/50 text-left group transition-all shadow-xl hover:bg-brand-panel">
                  <div className="flex items-center justify-between mb-4">
                      <div className="p-3 bg-brand-indigo/10 rounded-lg group-hover:bg-brand-indigo/20 transition-colors">
                         <Layers className="w-6 h-6 text-brand-indigo" />
@@ -607,7 +607,7 @@ export default function App() {
             </div>
             
             {history.length > 0 && (
-               <div className="mt-8 p-6 bg-brand-panel/90 rounded-2xl border border-white/20 shadow-xl backdrop-blur-sm">
+               <div className="mt-8 p-6 bg-brand-panel/90 rounded-2xl border border-brand-dark/20 shadow-xl backdrop-blur-sm">
                  <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-bold text-brand-cream/80 flex items-center gap-2"><Database className="w-4 h-4" /> Recent Analysis</h4>
                  </div>

@@ -20,19 +20,19 @@ const PipelineStep = ({
   subtext: string; 
 }) => {
   return (
-    <div className={`flex flex-col items-center p-4 rounded-xl border transition-all duration-500 ${
+    <div className={`flex flex-col items-center p-4 rounded-xl border transition-all duration-500 z-10 ${
       active 
-        ? 'border-brand-sky bg-brand-sky/10 shadow-[0_0_15px_rgba(125,211,252,0.3)] scale-105' 
+        ? 'border-brand-sky bg-brand-sky/10 shadow-[0_0_15px_rgba(125,211,252,0.3)] scale-105 backdrop-blur-sm' 
         : completed 
-          ? 'border-green-500/50 bg-green-950/20 text-green-400' 
-          : 'border-white/10 bg-brand-panel/50 text-slate-500'
+          ? 'border-green-500/50 bg-green-950/80 text-green-400' 
+          : 'border-white/10 bg-brand-panel text-slate-400 shadow-lg'
     }`}>
       <div className={`mb-3 p-3 rounded-full ${
         active ? 'bg-brand-sky text-brand-dark animate-pulse' : completed ? 'bg-green-500 text-brand-dark' : 'bg-white/10'
       }`}>
         {active ? <Loader2 className="w-6 h-6 animate-spin" /> : completed ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
       </div>
-      <h3 className={`font-bold text-sm mb-1 ${active ? 'text-brand-sky' : ''}`}>{label}</h3>
+      <h3 className={`font-bold text-sm mb-1 ${active ? 'text-brand-dark' : ''}`}>{label}</h3>
       <p className="text-xs opacity-70 text-center max-w-[120px]">{subtext}</p>
     </div>
   );
@@ -51,8 +51,8 @@ export const AgentPipeline: React.FC<AgentPipelineProps> = ({ status }) => {
   return (
     <div className="w-full py-8">
       <div className="flex flex-col md:flex-row justify-center items-center gap-4 md:gap-8 relative">
-        {/* Connecting Lines (Desktop) */}
-        <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-white/5 -z-10" />
+        {/* Connecting Lines (Desktop) - Darker for Light BG */}
+        <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-slate-400/30 -z-10" />
         
         <PipelineStep 
           active={isVision} 

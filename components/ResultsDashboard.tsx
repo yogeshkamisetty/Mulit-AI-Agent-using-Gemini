@@ -30,14 +30,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
     return (
       <div className="space-y-6 animate-fadeIn">
         <div className="flex items-center justify-between mb-4">
-           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-             <History className="w-5 h-5 text-brand-sky" />
+           <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2">
+             <History className="w-5 h-5 text-brand-indigo" />
              Analysis Database
            </h3>
-           {data && <button onClick={() => setActiveTab('live')} className="text-sm text-slate-400 hover:text-white">Back to Live</button>}
+           {data && <button onClick={() => setActiveTab('live')} className="text-sm text-slate-600 hover:text-brand-dark font-medium">Back to Live</button>}
         </div>
         
-        <div className="bg-brand-panel rounded-xl border border-white/10 overflow-hidden">
+        <div className="bg-brand-panel rounded-xl border border-white/10 overflow-hidden shadow-xl">
            <div className="overflow-x-auto">
              <table className="w-full text-sm text-left text-slate-400">
                <thead className="text-xs text-brand-cream/70 uppercase bg-black/20">
@@ -125,16 +125,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
     <div className="space-y-6 animate-fadeIn">
       
       {/* Navigation */}
-      <div className="flex items-center gap-4 border-b border-white/10 pb-1">
+      <div className="flex items-center gap-4 border-b border-brand-dark/10 pb-1">
         <button 
           onClick={() => setActiveTab('live')}
-          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'live' ? 'border-brand-sky text-brand-sky' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'live' ? 'border-brand-indigo text-brand-indigo font-bold' : 'border-transparent text-slate-500 hover:text-brand-dark'}`}
         >
           <LayoutDashboard className="w-4 h-4" /> Live Analysis
         </button>
         <button 
           onClick={() => setActiveTab('history')}
-          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'history' ? 'border-brand-sky text-brand-sky' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'history' ? 'border-brand-indigo text-brand-indigo font-bold' : 'border-transparent text-slate-500 hover:text-brand-dark'}`}
         >
           <History className="w-4 h-4" /> Database ({history.length})
         </button>
@@ -142,7 +142,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
 
       {/* Context Banner */}
       {locationContext && (
-        <div className="bg-brand-indigo/10 border border-brand-indigo/30 p-4 rounded-xl flex flex-col md:flex-row md:items-center gap-4">
+        <div className="bg-brand-indigo/10 border border-brand-indigo/30 p-4 rounded-xl flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
           <div className="flex items-start gap-3">
               <div className="p-2 bg-brand-indigo/20 rounded-lg">
                 <MapPin className="w-5 h-5 text-brand-indigo" />
@@ -150,7 +150,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
               <div>
                  <h4 className="text-sm font-bold text-brand-indigo">Location Intelligence</h4>
                  <p className="text-xs text-brand-indigo/70 max-w-xl">{locationContext.trafficInfluencers.join(' ')}</p>
-                 <p className="text-[10px] text-slate-500 mt-1 uppercase">Detected: {locationContext.address}</p>
+                 <p className="text-[10px] text-slate-600 mt-1 uppercase">Detected: {locationContext.address}</p>
               </div>
           </div>
         </div>
@@ -158,7 +158,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
 
       {/* Top Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-brand-panel p-4 rounded-xl border border-white/10 relative overflow-hidden group">
+        <div className="bg-brand-panel p-4 rounded-xl border border-white/10 relative overflow-hidden group shadow-lg">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Activity className="w-16 h-16 text-white" />
           </div>
@@ -179,7 +179,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
           </div>
         </div>
 
-        <div className="bg-brand-panel p-4 rounded-xl border border-white/10">
+        <div className="bg-brand-panel p-4 rounded-xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-sm">Avg Speed</span>
             <Clock className="w-4 h-4 text-brand-sky" />
@@ -189,7 +189,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
           </div>
         </div>
 
-        <div className="bg-brand-panel p-4 rounded-xl border border-white/10">
+        <div className="bg-brand-panel p-4 rounded-xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-sm">Pedestrians</span>
             <Users className="w-4 h-4 text-brand-indigo" />
@@ -199,14 +199,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
           </div>
         </div>
 
-        <div className="bg-brand-panel p-4 rounded-xl border border-white/10">
+        <div className="bg-brand-panel p-4 rounded-xl border border-white/10 shadow-lg">
            <TrafficLightWidget lights={analysis.trafficLights} />
         </div>
       </div>
 
       {/* Active Tracking Network Panel */}
       {trackedItems.length > 0 && (
-          <div className="bg-brand-panel p-6 rounded-xl border border-white/10">
+          <div className="bg-brand-panel p-6 rounded-xl border border-white/10 shadow-lg">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                     <ScanEye className="w-5 h-5 text-brand-sky" />
@@ -306,7 +306,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
 
       {/* Video Trend Chart */}
       {videoTrendData.length > 1 && (
-         <div className="bg-brand-panel p-6 rounded-xl border border-white/10">
+         <div className="bg-brand-panel p-6 rounded-xl border border-white/10 shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-white flex items-center gap-2">
               <Activity className="w-5 h-5 text-brand-sky" />
               Live Traffic Flow Tracking
@@ -335,7 +335,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
         
         {/* Left Column: Charts */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-brand-panel p-6 rounded-xl border border-white/10">
+          <div className="bg-brand-panel p-6 rounded-xl border border-white/10 shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-white">Vehicle Classification (Current Frame)</h3>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -358,7 +358,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
           </div>
 
           {/* Detailed Violations Panel */}
-          <div className="bg-brand-panel p-6 rounded-xl border border-white/10">
+          <div className="bg-brand-panel p-6 rounded-xl border border-white/10 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-brand-red" />
@@ -396,7 +396,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
         </div>
 
         {/* Right Column: Agent 3 Report */}
-        <div className="bg-brand-panel p-6 rounded-xl border border-white/10 h-fit">
+        <div className="bg-brand-panel p-6 rounded-xl border border-white/10 h-fit shadow-lg">
           <div className="flex items-center gap-2 mb-4 pb-4 border-b border-white/10">
             <div className="w-8 h-8 rounded-full bg-brand-indigo flex items-center justify-center text-white font-bold text-sm">A3</div>
             <div>

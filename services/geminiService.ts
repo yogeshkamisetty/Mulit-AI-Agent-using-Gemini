@@ -115,19 +115,25 @@ export const optimizeBase64Image = (base64Str: string, maxWidth = 800, mimeType 
     
     img.onload = () => {
       const scale = maxWidth / img.width;
-      if (scale >= 1) {
+      // List of explicitly supported formats by Gemini
+      const supportedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+      
+      // If the image is small enough AND the format is supported, skip canvas (preserves quality/transparency)
+      // Otherwise, we draw to canvas to resize OR to convert format (e.g. BMP -> PNG)
+      if (scale >= 1 && supportedFormats.includes(mimeType)) {
         resolve(src); // Return as Data URI
         return;
       }
       
       const canvas = document.createElement('canvas');
-      canvas.width = maxWidth;
-      canvas.height = img.height * scale;
+      canvas.width = Math.min(img.width, maxWidth);
+      canvas.height = img.height * (canvas.width / img.width);
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Reduce quality slightly for speed
-        resolve(canvas.toDataURL(mimeType, 0.85)); 
+        // Reduce quality slightly for speed, default to JPEG or requested supported type
+        const outputMime = supportedFormats.includes(mimeType) ? mimeType : 'image/jpeg';
+        resolve(canvas.toDataURL(outputMime, 0.85)); 
       } else {
         resolve(src);
       }
@@ -135,8 +141,6 @@ export const optimizeBase64Image = (base64Str: string, maxWidth = 800, mimeType 
 
     img.onerror = () => {
       // If image loading fails, resolve with the valid Data URI `src`.
-      // The consumer will split it by comma, so we MUST return a Data URI format,
-      // even if image loading failed (validation happens at API level then).
       resolve(src);
     };
   });
@@ -201,13 +205,18 @@ export const analyzeTrafficFast = async (base64Image: string, mimeType: string):
     try {
         // Pass mimeType to optimizer
         const optimizedImage = await optimizeBase64Image(base64Image, 640, mimeType); 
-        const base64Data = optimizedImage.split(',')[1];
+        
+        // FIX: Extract the ACTUAL mime type and data from the optimized result.
+        // optimizeBase64Image might convert the format (e.g. BMP -> JPEG), so we must trust its output header.
+        const match = optimizedImage.match(/^data:(.*);base64,(.*)$/);
+        const actualMimeType = match ? match[1] : mimeType;
+        const base64Data = match ? match[2] : optimizedImage.split(',')[1];
         
         const response = await ai.models.generateContent({
             model: modelId,
             contents: {
                 parts: [
-                    { inlineData: { mimeType: mimeType, data: base64Data } },
+                    { inlineData: { mimeType: actualMimeType, data: base64Data } },
                     { text: "Detect vehicles/pedestrians. Return 2D bounding boxes and congestion level." }
                 ]
             },
@@ -259,7 +268,12 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
   try {
         // Pass mimeType to optimizer
         const optimizedImage = await optimizeBase64Image(base64Image, 1024, mimeType);
-        const base64Data = optimizedImage.split(',')[1];
+        
+        // FIX: Extract the ACTUAL mime type and data from the optimized result.
+        // optimizeBase64Image might convert the format (e.g. BMP -> JPEG), so we must trust its output header.
+        const match = optimizedImage.match(/^data:(.*);base64,(.*)$/);
+        const actualMimeType = match ? match[1] : mimeType;
+        const base64Data = match ? match[2] : optimizedImage.split(',')[1];
 
         // Updated system instruction to be scene-aware
         const systemInstruction = `
@@ -285,7 +299,7 @@ export const analyzeTrafficImage = async (base64Image: string, mimeType: string)
           model: modelId,
           contents: {
             parts: [
-              { inlineData: { mimeType: mimeType, data: base64Data } },
+              { inlineData: { mimeType: actualMimeType, data: base64Data } },
               { text: "Analyze traffic scene. Identify scene type and detect issues." }
             ]
           },
