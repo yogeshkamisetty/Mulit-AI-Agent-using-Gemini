@@ -20,6 +20,7 @@ export interface DetectionItem {
   laneEvent?: 'Stable' | 'Lane Change' | 'Merging';
   isSpeeding?: boolean; // New: Tracking derived
   isWrongWay?: boolean; // New: Tracking derived
+  speedHistory?: number[]; // New: For visualization
 }
 
 export interface TrafficLight {

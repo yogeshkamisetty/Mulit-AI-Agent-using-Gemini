@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FullAnalysisResult, DetectionItem, TrafficLight, HistoryItem } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, Legend, AreaChart, Area } from 'recharts';
 import { AlertTriangle, ShieldCheck, Car, Users, TrendingUp, Zap, MapPin, Clock, History, LayoutDashboard, Ban, Activity, ScanEye, ArrowRight, ExternalLink } from 'lucide-react';
 
 interface ResultsDashboardProps {
@@ -9,6 +9,17 @@ interface ResultsDashboardProps {
   videoSessionData: FullAnalysisResult[];
   onLoadHistoryItem: (item: HistoryItem) => void;
 }
+
+const CustomSparklineTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/90 border border-slate-700 px-2 py-1 rounded text-[10px] shadow-xl">
+        <span className="text-cyan-400 font-mono">{payload[0].value} km/h</span>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, history, videoSessionData, onLoadHistoryItem }) => {
   const [activeTab, setActiveTab] = useState<'live' | 'history'>('live');
@@ -201,8 +212,22 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {trackedItems.slice(0, 8).map((item, i) => (
-                    <div key={i} className="bg-slate-900/50 border border-slate-700 p-3 rounded-lg relative overflow-hidden">
+                {trackedItems.slice(0, 8).map((item, i) => {
+                    const isSpeeding = item.isSpeeding;
+                    const isWrongWay = item.isWrongWay;
+                    let borderClass = 'border-slate-700';
+                    let bgClass = 'bg-slate-900/50';
+                    
+                    if (isSpeeding) {
+                        borderClass = 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse-slow';
+                        bgClass = 'bg-red-950/20';
+                    } else if (isWrongWay) {
+                        borderClass = 'border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.2)] animate-pulse-slow';
+                        bgClass = 'bg-orange-950/20';
+                    }
+
+                    return (
+                    <div key={i} className={`${bgClass} border ${borderClass} p-3 rounded-lg relative overflow-hidden group hover:border-cyan-500/50 transition-all`}>
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-xs font-bold text-slate-300 truncate">{item.object}</span>
                             <div className="flex items-center gap-2">
@@ -216,8 +241,11 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
                             </div>
                         </div>
                         <div className="flex items-end gap-1">
-                            <span className="text-lg font-mono font-bold text-white">{item.estimatedSpeed || 0}</span>
+                            <span className={`text-lg font-mono font-bold ${isSpeeding ? 'text-red-400' : 'text-white'}`}>
+                                {item.estimatedSpeed || 0}
+                            </span>
                             <span className="text-[10px] text-slate-500 mb-1">km/h</span>
+                            {isSpeeding && <AlertTriangle className="w-3 h-3 text-red-500 mb-1.5 ml-1 animate-bounce" />}
                         </div>
                         
                         <div className="mt-2 text-[10px] flex items-center gap-1 min-h-[16px]">
@@ -229,9 +257,36 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, histor
                                 <span className="text-slate-600">Lane Stable</span>
                             )}
                         </div>
-                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-cyan-500/30"></div>
+
+                         {/* Speed History Sparkline */}
+                         {item.speedHistory && item.speedHistory.length > 2 && (
+                             <div className="h-12 mt-2 bg-slate-950/30 rounded border border-slate-800/50 overflow-hidden relative">
+                               <ResponsiveContainer width="100%" height="100%">
+                                 <AreaChart data={item.speedHistory.map((s, idx) => ({ idx, speed: s }))}>
+                                   <defs>
+                                     <linearGradient id={`speedGradient-${i}`} x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor={isSpeeding ? "#ef4444" : "#06b6d4"} stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor={isSpeeding ? "#ef4444" : "#06b6d4"} stopOpacity={0}/>
+                                     </linearGradient>
+                                   </defs>
+                                   <Tooltip content={<CustomSparklineTooltip />} cursor={{ stroke: isSpeeding ? '#ef4444' : '#06b6d4', strokeWidth: 1, opacity: 0.5 }} isAnimationActive={false} />
+                                   <Area 
+                                     type="monotone" 
+                                     dataKey="speed" 
+                                     stroke={isSpeeding ? "#ef4444" : "#22d3ee"} 
+                                     fill={`url(#speedGradient-${i})`}
+                                     strokeWidth={2} 
+                                     isAnimationActive={false} 
+                                   />
+                                 </AreaChart>
+                               </ResponsiveContainer>
+                             </div>
+                         )}
+
+                        <div className={`absolute bottom-0 left-0 w-full h-0.5 ${isSpeeding ? 'bg-red-500/50' : isWrongWay ? 'bg-orange-500/50' : 'bg-cyan-500/30'}`}></div>
                     </div>
-                ))}
+                );
+                })}
             </div>
           </div>
       )}

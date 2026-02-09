@@ -16,6 +16,7 @@ interface TrackedObject {
   centroid: [number, number]; // [x, y] normalized
   avgHeight: number; // Smoothed normalized height for depth scaling
   laneHistory: number[]; // Store recent X positions for lane analysis
+  speedHistory: number[]; // Store recent speeds for smoothing
   missingFrames: number;
   speed: number;    // km/h (Absolute)
   velocity: number; // km/h (Signed)
@@ -29,7 +30,7 @@ interface TrackedObject {
   kalman: KalmanState;
 }
 
-// Typical lengths in meters used for auto-calibration
+// Typical lengths in meters used for auto-calibration (Virtual Ruler)
 const REFERENCE_LENGTHS_METERS: Record<string, number> = {
   'car': 4.5,
   'taxi': 4.5,
@@ -63,9 +64,9 @@ export class ObjectTracker {
   public SPEED_LIMIT_LIGHT = 50; 
 
   // Kalman Filter Tuning
-  private R = 0.005;     // Measurement Noise (approx 0.5% screen height jitter)
-  private Q_pos = 0.001; // Process Noise Position (low, model is accurate)
-  private Q_vel = 0.8;   // Process Noise Velocity (higher to catch braking/acceleration)
+  private R = 0.005;     // Measurement Noise
+  private Q_pos = 0.001; // Process Noise Position
+  private Q_vel = 0.8;   // Process Noise Velocity
 
   constructor() {}
 
@@ -75,7 +76,7 @@ export class ObjectTracker {
     // 1. Prediction Step (Age Tracks)
     this.tracks.forEach(t => t.missingFrames++);
 
-    // 2. Matching Step (Greedy Association)
+    // 2. Matching Step
     const unmatchedDetections = new Set(validDetections.map((_, i) => i));
     
     this.tracks.forEach(track => {
@@ -85,14 +86,12 @@ export class ObjectTracker {
       validDetections.forEach((det, index) => {
         if (!unmatchedDetections.has(index) || !det.box_2d) return;
         
-        // Priority 1: IoU
         const iou = this.calculateIoU(track.box, det.box_2d);
         if (iou > this.iouThreshold && iou > bestScore) {
           bestScore = iou;
           bestMatchIndex = index;
         }
         
-        // Priority 2: Centroid Distance (Backup for fast moving objects)
         if (bestMatchIndex === -1) {
             const detCentroid = this.getCentroid(det.box_2d);
             const dist = Math.sqrt(
@@ -116,61 +115,73 @@ export class ObjectTracker {
         
         track.missingFrames = 0;
         
-        const dt = (timestamp - track.updatedAt) / 1000; // seconds
+        const dt = (timestamp - track.updatedAt) / 1000;
         track.updatedAt = timestamp;
         
         const newCentroid = this.getCentroid(match.box_2d!);
         const currentHeight = (match.box_2d![2] - match.box_2d![0]) / 1000;
 
         // Kalman Filter Update
-        // Only update if time has passed, otherwise just update position
         if (dt > 0.001) {
            this.updateKalman(track.kalman, newCentroid[1], dt);
         } else {
-           // Reset position if duplicate frame
            track.kalman.y = newCentroid[1];
         }
 
-        // Update Track State
+        // Update State
         track.box = match.box_2d!;
         track.centroid = newCentroid;
-        // Smooth height to avoid jitter affecting speed scale
         track.avgHeight = track.avgHeight * 0.9 + currentHeight * 0.1;
         
-        // --- CALIBRATED SPEED ESTIMATION ---
-        // V (unit/s) / Height (unit) = Speed in "Vehicle Lengths per Second"
-        // Speed (m/s) = (V / Height) * Real_Length_M
+        // --- PRECISION SPEED CALIBRATION ---
         
+        // 1. Base Velocity (Screens/sec) from Kalman
         const v_norm_per_sec = track.kalman.v;
+
+        // 2. Virtual Ruler: Use known object length to establish scale
+        //    (e.g., if a 4.5m car is 0.1 screens high, then 1 screen = 45m at that depth)
         const refLength = this.getReferenceLength(track.class);
-        const safeHeight = Math.max(track.avgHeight, 0.02); // Avoid div/0
+        const safeHeight = Math.max(track.avgHeight, 0.02);
         
-        // Perspective Factor: 
-        // In most camera angles, vertical movement (Y) is compressed relative to vertical size (H)
-        // because H represents the object length projected, while Y represents ground distance.
-        // A factor of 1.0 implies top-down. 
-        // A factor > 1.0 implies a shallower angle. 
-        // 1.0 is a safe conservative baseline for "pixels per pixel" logic.
-        const perspectiveFactor = 1.0; 
+        // 3. Perspective Correction (Depth Compensation)
+        //    Objects near horizon (y=0) move slower in pixels for same real speed vs objects near bottom (y=1).
+        //    We apply a linear boost based on Y position to normalize this perspective distortion.
+        //    Formula: Scale increases as Y decreases (further away).
+        //    Base Factor 1.2 (for close objects) + up to 1.0 (for far objects)
+        const perspectiveCorrection = 1.2 + (1.0 - newCentroid[1]) * 0.8; 
 
-        const speedMps = (Math.abs(v_norm_per_sec) / safeHeight) * refLength * perspectiveFactor;
+        // 4. Calculate Raw Speed (m/s)
+        let speedMps = (Math.abs(v_norm_per_sec) / safeHeight) * refLength * perspectiveCorrection;
         
-        track.velocity = speedMps * 3.6 * Math.sign(v_norm_per_sec); // Signed km/h
-        track.speed = Math.abs(track.velocity);                      // Absolute km/h
+        // 5. Stationary Filter (Zero out noise < 3 km/h)
+        if (speedMps < 0.8) speedMps = 0;
 
-        // Lane Discipline Logic
+        // 6. Temporal Smoothing (EMA + Buffer)
+        track.speedHistory.push(speedMps * 3.6); // Convert to km/h
+        if (track.speedHistory.length > 20) track.speedHistory.shift(); // Keep more history for sparklines
+        
+        // Short term smoothing for display value
+        const shortTermHistory = track.speedHistory.slice(-5);
+        const avgSpeed = shortTermHistory.reduce((a, b) => a + b, 0) / shortTermHistory.length;
+        
+        // 7. Update Track Physics
+        track.speed = Math.floor(avgSpeed);
+        track.velocity = avgSpeed * Math.sign(v_norm_per_sec);
+
+        // Lane Logic
         track.laneHistory.push(newCentroid[0]);
         if (track.laneHistory.length > 10) track.laneHistory.shift();
         this.updateLaneStatus(track);
 
-        // Sync Track Data to Detection Item
+        // Sync to Detection
         match.trackId = track.id;
-        match.estimatedSpeed = Math.floor(track.speed);
+        match.estimatedSpeed = track.speed;
         match.laneEvent = track.laneStatus;
+        match.speedHistory = [...track.speedHistory]; // Export history for UI
       }
     });
 
-    // 3. Creation Step (New Tracks)
+    // 3. Creation Step
     unmatchedDetections.forEach(index => {
       const det = validDetections[index];
       if (det.box_2d) {
@@ -184,6 +195,7 @@ export class ObjectTracker {
           centroid: newCentroid,
           avgHeight: newHeight,
           laneHistory: [newCentroid[0]],
+          speedHistory: [0],
           missingFrames: 0,
           speed: 0,
           velocity: 0,
@@ -199,13 +211,11 @@ export class ObjectTracker {
         det.trackId = newTrack.id;
         det.estimatedSpeed = 0;
         det.laneEvent = 'Stable';
+        det.speedHistory = [0];
       }
     });
 
-    // 4. Analysis Step (Violations)
     this.checkViolations(validDetections);
-
-    // 5. Cleanup Step
     this.tracks = this.tracks.filter(t => t.missingFrames <= this.maxMissingFrames);
 
     return detections;
@@ -227,8 +237,7 @@ export class ObjectTracker {
   }
 
   private checkViolations(detections: DetectionItem[]) {
-      // Determine Traffic Flow Direction (Average of all moving vehicles)
-      const movingTracks = this.tracks.filter(t => t.speed > 5); // Ignore stationary
+      const movingTracks = this.tracks.filter(t => t.speed > 5);
       let flowDir = 0;
       if (movingTracks.length > 0) {
           const sumV = movingTracks.reduce((acc, t) => acc + t.velocity, 0);
@@ -240,7 +249,6 @@ export class ObjectTracker {
           const track = this.tracks.find(t => t.id === d.trackId);
           if (!track) return;
 
-          // Speeding Check
           let limit = this.SPEED_LIMIT_DEFAULT;
           const type = (track.class || '').toLowerCase();
           
@@ -256,21 +264,18 @@ export class ObjectTracker {
               track.speedingFrames = Math.max(0, track.speedingFrames - 1);
           }
 
-          if (track.speedingFrames >= 2) { 
+          if (track.speedingFrames >= 3) { // Require 3 frames of violation
                d.isSpeeding = true;
           }
 
-          // Wrong Way Check
-          // Requires significant flow speed and vehicle speed to be confident
           if (Math.abs(flowDir) > 10 && track.speed > 10) {
-               // If signs are opposite
                if (Math.sign(track.velocity) !== Math.sign(flowDir)) {
                    track.wrongWayFrames++;
                } else {
                    track.wrongWayFrames = 0;
                }
           }
-          if (track.wrongWayFrames >= 3) { 
+          if (track.wrongWayFrames >= 4) { 
                d.isWrongWay = true;
           }
       });
@@ -278,14 +283,10 @@ export class ObjectTracker {
 
   private updateLaneStatus(track: TrackedObject) {
       if (track.laneHistory.length < 5) return;
-      
       const recent = track.laneHistory.slice(-5);
       const minX = Math.min(...recent);
       const maxX = Math.max(...recent);
       const variance = maxX - minX;
-
-      // 0.05 normalized width is about 5% of screen width.
-      // If moving laterally more than 5% in 5 frames, likely changing lanes
       if (variance > 0.05) {
          track.laneStatus = 'Lane Change';
       } else {
@@ -304,55 +305,35 @@ export class ObjectTracker {
     const xA = Math.max(boxA[1], boxB[1]);
     const yB = Math.min(boxA[2], boxB[2]);
     const xB = Math.min(boxA[3], boxB[3]);
-
     const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
     const boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1]);
     const boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]);
-
     if (boxAArea + boxBArea - interArea === 0) return 0;
     return interArea / (boxAArea + boxBArea - interArea);
   }
 
-  // --- Kalman Filter Implementation ---
-
+  // --- Kalman Filter ---
   private initKalman(y: number): KalmanState {
-    return {
-      y: y,
-      v: 0,
-      p11: 1, p12: 0,
-      p21: 0, p22: 1
-    };
+    return { y: y, v: 0, p11: 1, p12: 0, p21: 0, p22: 1 };
   }
 
   private updateKalman(state: KalmanState, measurement: number, dt: number) {
-    // 1. Predict
-    // x_pred = F x
     const pred_y = state.y + state.v * dt;
     const pred_v = state.v;
-    
-    // P_pred = F P F^T + Q
     const dt2 = dt * dt;
     const pp11 = state.p11 + dt * (state.p12 + state.p21) + dt2 * state.p22 + (this.Q_pos * dt);
     const pp12 = state.p12 + dt * state.p22;
     const pp21 = state.p21 + dt * state.p22;
     const pp22 = state.p22 + (this.Q_vel * dt);
 
-    // 2. Update
-    // y_innov = z - H x_pred
     const y_innov = measurement - pred_y;
-    
-    // S = H P_pred H^T + R
     const s = pp11 + this.R;
-    
-    // K = P_pred H^T S^-1
     const k1 = pp11 / s;
     const k2 = pp21 / s; 
 
-    // x_new = x_pred + K y_innov
     state.y = pred_y + k1 * y_innov;
     state.v = pred_v + k2 * y_innov;
 
-    // P_new = (I - K H) P_pred
     const p11_new = (1 - k1) * pp11;
     const p12_new = (1 - k1) * pp12;
     const p21_new = -k2 * pp11 + pp21;
